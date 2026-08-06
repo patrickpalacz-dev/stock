@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WMS PRO · Kalmar Stock Point Dashboard</title>
+<!-- Biblioteka SheetJS do bezbłędnej obsługi plików XLSX i XLS -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root{
+  --bg: #0a0d0e;
+  --bg-grid: #0d1112;
+  --surface: #12181a;
+  --surface2: #1a2225;
+  --surface3: #212b2e;
+  --border: #263134;
+  --border-soft: #1c2528;
+  --text: #eef2f2;
+  --muted: #7f9298;
+  --muted2: #566267;
+  --amber: #ff9d2e;
+  --amber-dim: #7a5322;
+  --cyan: #4fd1c5;
+  --cyan-dim: #1f4744;
+  --danger: #ff5c5c;
+  --danger-dim: #4a1f1f;
+  --warning: #ffcf56;
+  --warning-dim: #4a3d1a;
+  --ok: #59d18a;
+  --ok-dim: #1c3b28;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --sans: 'Inter', -apple-system, sans-serif;
+}
+
+*{ box-sizing:border-box; }
+html,body{ margin:0; padding:0; }
+body{
+  background:
+    linear-gradient(var(--bg-grid) 1px, transparent 1px) 0 0/100% 44px,
+    var(--bg);
+  color:var(--text);
+  font-family:var(--sans);
+  min-height:100vh;
+}
+
+::-webkit-scrollbar{ width:10px; height:10px; }
+::-webkit-scrollbar-track{ background:var(--surface); }
+::-webkit-scrollbar-thumb{ background:var(--surface3); border-radius:6px; }
+::-webkit-scrollbar-thumb:hover{ background:var(--muted2); }
+
+a{ color:var(--cyan); }
+
+.topbar{
+  position:sticky; top:0; z-index:50;
+  display:flex; align-items:center; gap:18px;
+  padding:14px 26px;
+  background:rgba(10,13,14,0.88);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--border);
+}
+.brand{ display:flex; align-items:center; gap:12px; }
+.brand-mark{
+  width:34px; height:34px; border-radius:6px;
+  background:repeating-linear-gradient(135deg,var(--amber) 0 4px, #7a5322 4px 8px);
+  border:1px solid var(--border);
+  flex:none;
+}
+.brand-text{ display:flex; flex-direction:column; line-height:1.15; }
+.brand-text b{ font-size:15px; letter-spacing:0.02em; }
+.brand-text span{ font-size:11px; color:var(--muted); font-family:var(--mono); letter-spacing:0.05em; }
+
+.tabs{ display:flex; gap:4px; margin-left:8px; flex-wrap:wrap; }
+.tab-btn{
+  font-family:var(--mono);
+  font-size:12.5px;
+  letter-spacing:0.03em;
+  background:transparent;
+  color:var(--muted);
+  border:1px solid transparent;
+  padding:8px 14px;
+  border-radius:7px;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:all .15s ease;
+}
+.tab-btn:hover{ color:var(--text); background:var(--surface2); }
+.tab-btn.active{ color:var(--bg); background:var(--amber); font-weight:600; }
+
+.import-btn{
+  font-family:var(--mono);
+  font-size:12px;
+  background:var(--cyan-dim);
+  color:var(--cyan);
+  border:1px solid rgba(79,209,197,0.4);
+  padding:7px 14px;
+  border-radius:6px;
+  cursor:pointer;
+  transition:all .15s ease;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.import-btn:hover{ background:var(--cyan); color:var(--bg); }
+
+.status-pill{
+  margin-left:auto;
+  display:flex; align-items:center; gap:8px;
+  font-family:var(--mono); font-size:11px; color:var(--muted);
+  border:1px solid var(--border); padding:6px 10px; border-radius:20px;
+  white-space:nowrap;
+}
+.dot{ width:7px; height:7px; border-radius:50%; background:var(--ok); box-shadow:0 0 8px var(--ok); }
+
+.wrap{ max-width:1360px; margin:0 auto; padding:26px; }
+.view{ display:none; animation:fadein .25s ease; }
+.view.active{ display:block; }
+@keyframes fadein{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:translateY(0);} }
+
+.section-title{ display:flex; align-items:baseline; gap:10px; margin:0 0 14px 0; }
+.section-title h2{ font-size:16px; margin:0; letter-spacing:0.01em; }
+.section-title .eyebrow{ font-family:var(--mono); font-size:11px; color:var(--amber); letter-spacing:0.08em; }
+.section-sub{ color:var(--muted); font-size:12.5px; margin:-8px 0 16px 0; }
+
+/* KPI cards */
+.kpi-grid{ display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:22px; }
+.kpi{
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:16px; position:relative; overflow:hidden;
+}
+.kpi::before{
+  content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--kpi-color,var(--amber));
+}
+.kpi .label{ font-size:11px; color:var(--muted); font-family:var(--mono); letter-spacing:0.04em; text-transform:uppercase; }
+.kpi .value{ font-size:26px; font-weight:700; margin-top:6px; font-variant-numeric:tabular-nums; }
+.kpi .sub{ font-size:11px; color:var(--muted2); margin-top:4px; font-family:var(--mono); }
+
+.grid-2{ display:grid; grid-template-columns:1.3fr 1fr; gap:16px; margin-bottom:22px; }
+.panel{ background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px; }
+.panel h3{ margin:0 0 4px 0; font-size:13px; letter-spacing:0.03em; }
+.panel .desc{ font-size:11.5px; color:var(--muted); margin:0 0 14px 0; }
+
+/* bars */
+.bar-row{ display:flex; align-items:center; gap:10px; margin-bottom:9px; }
+.bar-row .rlabel{ width:38px; font-family:var(--mono); font-size:11.5px; color:var(--muted); flex:none; }
+.bar-track{ flex:1; height:16px; background:var(--surface2); border-radius:4px; overflow:hidden; position:relative; }
+.bar-fill{ height:100%; border-radius:4px; }
+.bar-row .rval{ width:74px; text-align:right; font-family:var(--mono); font-size:11px; color:var(--muted); flex:none; }
+
+#donut-center{ display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1.2; }
+#donut-center b{ font-size:19px; font-weight:700; }
+#donut-center span{ font-size:9.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; margin-top:2px; }
+
+.legend{ display:flex; gap:16px; margin-top:10px; flex-wrap:wrap; }
+.legend-item{ display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--muted); font-family:var(--mono); }
+.legend-dot{ width:9px; height:9px; border-radius:2px; }
+
+/* Rack heatmap */
+.rack-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); gap:6px; }
+.rack-tile{
+  border-radius:6px; padding:8px 6px; text-align:center; cursor:pointer;
+  border:1px solid rgba(255,255,255,0.06);
+  transition:transform .1s ease, box-shadow .1s ease;
+  font-family:var(--mono);
+}
+.rack-tile:hover{ transform:translateY(-2px); box-shadow:0 4px 14px rgba(0,0,0,0.4); }
+.rack-tile .rt-name{ font-size:12px; font-weight:700; }
+.rack-tile .rt-occ{ font-size:10px; opacity:0.85; margin-top:2px; }
+
+/* tables */
+.table-wrap{ background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+thead th{
+  text-align:left; padding:10px 12px; background:var(--surface2);
+  font-family:var(--mono); font-size:10.5px; color:var(--muted); text-transform:uppercase;
+  letter-spacing:0.05em; border-bottom:1px solid var(--border); cursor:pointer; white-space:nowrap;
+  position:sticky; top:0;
+}
+thead th:hover{ color:var(--amber); }
+thead th.sorted{ color:var(--amber); }
+tbody td{ padding:9px 12px; border-bottom:1px solid var(--border-soft); font-family:var(--mono); vertical-align:middle; }
+tbody tr:hover{ background:var(--surface2); }
+.scroll-body{ max-height:560px; overflow:auto; }
+
+.badge{
+  display:inline-block; padding:3px 9px; border-radius:20px; font-size:10.5px; font-weight:600;
+  font-family:var(--mono); letter-spacing:0.03em;
+}
+.badge-critical{ background:var(--danger-dim); color:var(--danger); }
+.badge-low{ background:var(--warning-dim); color:var(--warning); }
+.badge-ok{ background:var(--ok-dim); color:var(--ok); }
+
+.toolbar{ display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+.search-box{
+  display:flex; align-items:center; gap:8px;
+  background:var(--surface); border:1px solid var(--border); border-radius:8px;
+  padding:9px 12px; flex:1; min-width:220px;
+}
+.search-box input{
+  background:transparent; border:none; outline:none; color:var(--text);
+  font-family:var(--mono); font-size:13px; width:100%;
+}
+.search-box svg{ flex:none; opacity:0.5; }
+.chip-group{ display:flex; gap:6px; }
+.chip{
+  font-family:var(--mono); font-size:11.5px; padding:8px 13px; border-radius:8px;
+  background:var(--surface); border:1px solid var(--border); color:var(--muted); cursor:pointer;
+}
+.chip.active{ background:var(--amber); border-color:var(--amber); color:var(--bg); font-weight:700; }
+.chip.crit.active{ background:var(--danger); border-color:var(--danger); color:#1a0000; }
+.chip.low.active{ background:var(--warning); border-color:var(--warning); color:#2a2200; }
+
+select.select-native{
+  background:var(--surface); border:1px solid var(--border); color:var(--text);
+  font-family:var(--mono); font-size:12.5px; padding:9px 12px; border-radius:8px; outline:none;
+}
+
+.count-tag{ font-family:var(--mono); font-size:11px; color:var(--muted); margin-left:auto; white-space:nowrap; }
+
+/* WMS monitor layout */
+.monitor-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.stat-row{ display:flex; gap:12px; margin:12px 0; }
+.mini-stat{
+  flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:8px;
+  padding:10px 12px;
+}
+.mini-stat .n{ font-size:20px; font-weight:700; font-family:var(--mono); }
+.mini-stat .l{ font-size:10.5px; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; }
+
+.loc-pill-list{ display:flex; flex-wrap:wrap; gap:6px; max-height:220px; overflow:auto; padding:2px; }
+.loc-pill{
+  font-family:var(--mono); font-size:11px; padding:5px 9px; border-radius:6px;
+  background:var(--danger-dim); color:var(--danger); border:1px solid rgba(255,92,92,0.25);
+}
+
+.autocomplete{ position:relative; }
+.ac-results{
+  position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:40;
+  background:var(--surface3); border:1px solid var(--border); border-radius:8px;
+  max-height:280px; overflow:auto; box-shadow:0 12px 30px rgba(0,0,0,0.5);
+  display:none;
+}
+.ac-results.show{ display:block; }
+.ac-row{ padding:9px 12px; cursor:pointer; border-bottom:1px solid var(--border-soft); }
+.ac-row:hover{ background:var(--surface2); }
+.ac-row .code{ font-family:var(--mono); font-size:12px; color:var(--amber); }
+.ac-row .name{ font-size:11px; color:var(--muted); margin-top:2px; }
+
+.result-card{
+  background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:16px; margin-top:14px;
+}
+.result-card .item-title{ font-size:14px; font-weight:700; margin-bottom:2px; }
+.result-card .item-code{ font-family:var(--mono); color:var(--amber); font-size:12px; }
+.suggestion-box{
+  margin-top:12px; padding:12px 14px; border-radius:8px;
+  background:var(--cyan-dim); border:1px solid rgba(79,209,197,0.3);
+  font-family:var(--mono); font-size:12.5px; color:var(--cyan);
+}
+.suggestion-box b{ color:var(--text); }
+
+.empty-state{ text-align:center; padding:40px 20px; color:var(--muted); font-family:var(--mono); font-size:12.5px; }
+
+footer.appfoot{
+  text-align:center; padding:28px; color:var(--muted2); font-size:11px; font-family:var(--mono);
+}
+
+@media (max-width:1000px){
+  .kpi-grid{ grid-template-columns:repeat(2,1fr); }
+  .grid-2{ grid-template-columns:1fr; }
+  .monitor-grid{ grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <div class="brand-text">
+      <b>WMS PRO</b>
+      <span>KALMAR · STOCK POINT WB0110</span>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+    <button class="tab-btn" data-tab="rack">Rack Summary</button>
+    <button class="tab-btn" data-tab="putaway">Putaway Today</button>
+    <button class="tab-btn" data-tab="relok">Gdzie Relok</button>
+    <button class="tab-btn" data-tab="monitor">WMS Monitor</button>
+  </div>
+  <label class="import-btn">
+    📊 Wgraj Plik Excel (XLSX / CSV)
+    <input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv" style="display:none;">
+  </label>
+  <div class="status-pill"><span class="dot"></span> Snapshot danych · <span id="meta-total-locs">–</span> lokacji · <span id="meta-items">–</span> itemów</div>
+</div>
+
+<div class="wrap">
+
+  <!-- ================= DASHBOARD ================= -->
+  <div class="view active" id="view-dashboard">
+    <div class="section-title"><span class="eyebrow">01 / OVERVIEW</span><h2>Podsumowanie magazynu</h2></div>
+    <p class="section-sub">Strefa STD, magazyn WB0110 — regały C i D. Raport filtrowany automatycznie z pliku wyjściowego.</p>
+
+    <div class="kpi-grid">
+      <div class="kpi" style="--kpi-color:var(--cyan)"><div class="label">Lokacje razem</div><div class="value" id="kpi-total">–</div><div class="sub" id="meta-racks-sub">&nbsp;</div></div>
+      <div class="kpi" style="--kpi-color:var(--ok)"><div class="label">Zajęte</div><div class="value" id="kpi-occupied">–</div><div class="sub" id="kpi-occupied-sub">–</div></div>
+      <div class="kpi" style="--kpi-color:var(--danger)"><div class="label">Puste</div><div class="value" id="kpi-empty">–</div><div class="sub" id="kpi-empty-sub">–</div></div>
+      <div class="kpi" style="--kpi-color:var(--warning)"><div class="label">Low stock (qty=1)</div><div class="value" id="kpi-low">–</div><div class="sub">do konsolidacji</div></div>
+      <div class="kpi" style="--kpi-color:var(--amber)"><div class="label">Suma sztuk</div><div class="value" id="kpi-qty">–</div><div class="sub">wszystkie lokacje</div></div>
+      <div class="kpi" style="--kpi-color:var(--muted)"><div class="label">Regały</div><div class="value" id="kpi-racks">–</div><div class="sub">C01–C99 / D01–D19</div></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <h3>🔥 TOP regały do priorytetowego uzupełnienia</h3>
+        <p class="desc">Score = puste×3 + qty=1×1 — im wyżej, tym pilniejszy putaway.</p>
+        <div id="top-racks-bars"></div>
+      </div>
+      <div class="panel">
+        <h3>Struktura obłożenia</h3>
+        <p class="desc">Udział lokacji zajętych / low stock / pustych.</p>
+        <div style="display:flex;align-items:center;gap:22px;">
+          <div id="donut" style="width:120px;height:120px;border-radius:50%;position:relative;flex:none;display:flex;align-items:center;justify-content:center;">
+            <div style="width:76px;height:76px;border-radius:50%;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;">
+              <div id="donut-center" style="text-align:center;font-family:var(--mono);"></div>
+            </div>
+          </div>
+          <div class="legend" style="flex-direction:column;gap:10px;">
+            <div class="legend-item"><span class="legend-dot" style="background:var(--ok)"></span>Zajęte (qty&gt;1)</div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--warning)"></span>Low stock (qty=1)</div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--danger)"></span>Puste (qty=0)</div>
+          </div>
+        </div>
+        <h3 style="margin-top:18px;">Strefa C vs D</h3>
+        <div id="zone-compare"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= RACK SUMMARY ================= -->
+  <div class="view" id="view-rack">
+    <div class="section-title"><span class="eyebrow">02 / RACK SUMMARY</span><h2>Mapa obłożenia regałów</h2></div>
+    <p class="section-sub">Kliknij kafelek regału, aby przejść do WMS Monitor i zobaczyć jego wolne lokacje.</p>
+    <div class="panel" style="margin-bottom:18px;">
+      <div id="rack-heatmap" class="rack-grid"></div>
+    </div>
+    <div class="table-wrap">
+      <div class="scroll-body">
+        <table id="rack-table">
+          <thead>
+            <tr>
+              <th data-col="rack" class="sorted">Rack</th>
+              <th data-col="total">Locations</th>
+              <th data-col="occupied">Occupied</th>
+              <th data-col="empty">Empty</th>
+              <th data-col="low">Qty=1</th>
+              <th data-col="occPct">Occupancy %</th>
+              <th data-col="emptyPct">Empty %</th>
+              <th data-col="lowPct">Low %</th>
+              <th data-col="score">Score</th>
+            </tr>
+          </thead>
+          <tbody id="rack-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= PUTAWAY TODAY ================= -->
+  <div class="view" id="view-putaway">
+    <div class="section-title"><span class="eyebrow">03 / PUTAWAY TODAY</span><h2>Lokacje do uzupełnienia</h2></div>
+    <p class="section-sub">Priorytet: najpierw puste lokacje (CRITICAL_EMPTY), potem konsolidacja qty=1 (LOW_STOCK).</p>
+    <div class="toolbar">
+      <div class="chip-group">
+        <div class="chip putaway-chip active" data-filter="ALL">Wszystkie</div>
+        <div class="chip crit putaway-chip" data-filter="CRITICAL_EMPTY">Puste</div>
+        <div class="chip low putaway-chip" data-filter="LOW_STOCK">Qty = 1</div>
+      </div>
+      <div class="search-box" style="max-width:280px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="putaway-search" placeholder="Szukaj lokacji / regału…">
+      </div>
+      <div class="count-tag" id="putaway-count"></div>
+    </div>
+    <div class="table-wrap">
+      <div class="scroll-body">
+        <table>
+          <thead><tr><th>Location</th><th>Rack</th><th>Qty</th><th>Priority</th></tr></thead>
+          <tbody id="putaway-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <p class="section-sub" id="putaway-more" style="margin-top:10px;"></p>
+  </div>
+
+  <!-- ================= GDZIE RELOK ================= -->
+  <div class="view" id="view-relok">
+    <div class="section-title"><span class="eyebrow">04 / GDZIE RELOK</span><h2>Konsolidacja ostatnich sztuk</h2></div>
+    <p class="section-sub">Itemy, dla których na danej lokacji została ostatnia sztuka (qty=1) — z propozycją, gdzie dołożyć zapas tego samego itemu w większej ilości.</p>
+    <div class="toolbar">
+      <div class="search-box" style="max-width:360px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="relok-search" placeholder="Szukaj lokacji, kodu lub nazwy itemu…">
+      </div>
+      <div class="chip active" id="relok-toggle">Tylko z propozycją konsolidacji</div>
+      <div class="count-tag" id="relok-count"></div>
+    </div>
+    <p class="section-sub" id="relok-total-badge" style="margin-top:-8px;margin-bottom:14px;"></p>
+    <div class="table-wrap">
+      <div class="scroll-body">
+        <table>
+          <thead><tr><th>Lokacja (ostatnia szt.)</th><th>Kod itemu</th><th>Nazwa itemu</th><th>Qty</th><th>Sugerowana konsolidacja</th></tr></thead>
+          <tbody id="relok-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <p class="section-sub" id="relok-more" style="margin-top:10px;"></p>
+  </div>
+
+  <!-- ================= WMS MONITOR ================= -->
+  <div class="view" id="view-monitor">
+    <div class="section-title"><span class="eyebrow">05 / WMS MONITOR</span><h2>Podgląd regału i wyszukiwanie itemów</h2></div>
+    <p class="section-sub">Wybierz regał, aby zobaczyć wolne miejsca, albo wyszukaj item, aby zobaczyć jego lokalizacje i sugerowane miejsce dołożenia.</p>
+
+    <div class="monitor-grid">
+      <div class="panel">
+        <h3>📦 Podgląd regału</h3>
+        <p class="desc">Wolne lokacje w wybranym regale.</p>
+        <select id="monitor-rack-select" class="select-native" style="width:100%;margin-bottom:10px;"></select>
+        <div class="stat-row">
+          <div class="mini-stat"><div class="n" id="monitor-free-count">–</div><div class="l">Wolne lokacje</div></div>
+          <div class="mini-stat"><div class="n" id="monitor-rack-occ">–</div><div class="l">Obłożenie</div></div>
+          <div class="mini-stat"><div class="n" id="monitor-rack-total">–</div><div class="l">Lokacji razem</div></div>
+        </div>
+        <div class="loc-pill-list" id="monitor-empty-list"></div>
+
+        <h3 style="margin-top:20px;">📍 Idź do lokacji</h3>
+        <p class="desc">Podaj kod lokacji, aby zobaczyć cały regał wokół niej.</p>
+        <div style="display:flex;gap:8px;">
+          <div class="search-box"><input id="monitor-loc-input" placeholder="np. C070204"></div>
+          <button id="monitor-loc-search-btn" class="chip active" style="cursor:pointer;">Szukaj</button>
+        </div>
+        <div id="monitor-nearby-result" style="margin-top:12px;"></div>
+      </div>
+
+      <div class="panel">
+        <h3>🔍 Wyszukaj item</h3>
+        <p class="desc">Wpisz kod lub fragment nazwy itemu.</p>
+        <div class="autocomplete">
+          <div class="search-box">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <input id="monitor-item-input" placeholder="np. A71092.0100 lub FLANGE">
+          </div>
+          <div class="ac-results" id="monitor-ac-results"></div>
+        </div>
+
+        <div class="result-card" id="monitor-result-card" style="display:none;">
+          <div class="item-title" id="mr-name"></div>
+          <div class="item-code" id="mr-code"></div>
+          <div class="stat-row">
+            <div class="mini-stat"><div class="n" id="mr-total">–</div><div class="l">Suma sztuk</div></div>
+            <div class="mini-stat"><div class="n" id="mr-loccount">–</div><div class="l">Liczba lokacji</div></div>
+          </div>
+          <div class="scroll-body" style="max-height:220px;">
+            <table>
+              <thead><tr><th>Lokacja</th><th>Qty itemu</th><th>Unik. itemów tu</th><th>Suma sztuk tu</th></tr></thead>
+              <tbody id="mr-locs-body"></tbody>
+            </table>
+          </div>
+          <div class="suggestion-box" id="mr-suggestion"></div>
+          <div class="suggestion-box" id="mr-nearest" style="margin-top:8px;background:var(--amber-dim);border-color:rgba(255,157,46,0.3);color:var(--amber);"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer class="appfoot">WMS PRO · Silnik dynamicznego raportowania i przeliczania XLSX/CSV</footer>
+
+<script>
+(function(){
+  "use strict";
+
+  let filtered = [];
+  let items = {};
+  let locIndex = {};
+  let itemCodes = [];
+  let racks = [];
+  let putaway = [];
+  let relok = [];
+  let kpis = {};
+  let zoneStats = {};
+
+  let rackSort = {col:'rack', dir:1};
+  let putawayFilter = 'ALL';
+  let putawayQuery = '';
+  let relokQuery = '';
+  let relokOnlyActionable = true;
+
+  // Sprawdzanie walidacji lokacji zgodne z AppScript (Strefa C: 01-99, Strefa D: 01-19)
+  function isValidLocation(loc){
+    if(!loc) return false;
+    loc = String(loc).trim().toUpperCase();
+    const m = loc.match(/^([CD])(\d{2})/);
+    if(!m) return false;
+    const zone = m[1];
+    const rack = parseInt(m[2],10);
+    if(zone === "C") return rack >= 1 && rack <= 99;
+    if(zone === "D") return rack >= 1 && rack <= 19;
+    return false;
+  }
+
+  function getRack(loc){
+    const m = String(loc).toUpperCase().match(/^([CD]\d{2})/);
+    return m ? m[1] : "";
+  }
+
+  // Generowanie pełnego spisu 6547 lokacji wzorcowych w przepadku braku dedykowanego sheetu ALL_LOC
+  function generateDefaultAllLocations(){
+    const locs = [];
+    // Regały C01 do C10 (zgodne z układem magazynowym C)
+    for(let r=1; r<=10; r++){
+      const rackStr = 'C' + String(r).padStart(2, '0');
+      if(r===1){
+        locs.push('C010113', 'C010514');
+      } else if(r===3){
+        for(let l=0; l<=7; l++){
+          for(let p=16; p<=24; p++){
+            locs.push(`C030${l}${p}`);
+          }
+        }
+      } else if(r===4){
+        for(let l=0; l<=7; l++){
+          for(let p=10; p<=33; p++){
+            locs.push(`C040${l}${p}`);
+          }
+        }
+      } else if(r===5){
+        for(let l=0; l<=7; l++){
+          for(let p=1; p<=33; p++){
+            locs.push(`C050${l}${p}`);
+          }
+        }
+      } else if(r===6 || r===7 || r===8 || r===9){
+        for(let l=0; l<=7; l++){
+          for(let p=1; p<=33; p++){
+            locs.push(`${rackStr}0${l}${String(p).padStart(2,'0')}`);
+          }
+        }
+      } else if(r===10){
+        for(let l=0; l<=7; l++){
+          const maxP = (l===0)? 15 : (l===1 || l===2 || l===3 || l===4 || l===5 || l===6)? 15 : 15;
+          for(let p=1; p<=maxP; p++){
+            locs.push(`C100${l}${String(p).padStart(2,'0')}`);
+          }
+        }
+      }
+    }
+    // C17 (uzupełnienie)
+    for(let p=1; p<=18; p++) locs.push(`C1700${String(p).padStart(2,'0')}`);
+    for(let p=30; p<=66; p++) locs.push(`C1700${String(p).padStart(2,'0')}`);
+
+    // Regały D01 - D19
+    for(let r=1; r<=19; r++){
+      const rackStr = 'D' + String(r).padStart(2, '0');
+      if(r===1) { locs.push('D01', 'D010001'); continue; }
+      if(r===12) locs.push('D12A');
+      if(r===14) locs.push('D14A');
+      if(r===16) locs.push('D16A');
+      if(r===18) locs.push('D18A');
+
+      let maxLevel = 7;
+      let maxPos = 48;
+      if(r===6) maxPos = 48;
+      if(r===7) maxPos = 48;
+      if(r===8) maxPos = 48;
+      if(r===9) maxPos = 48;
+      if(r===10) maxPos = 50;
+      if(r===11) maxPos = 50;
+      if(r===12) maxPos = 50;
+      if(r===13) maxPos = 50;
+      if(r===14) maxPos = 50;
+      if(r===15) maxPos = 50;
+      if(r===16) maxPos = 50;
+      if(r===17) maxPos = 50;
+      if(r===18) maxPos = 50;
+      if(r===19) maxPos = 50;
+
+      for(let l=0; l<=maxLevel; l++){
+        for(let p=1; p<=maxPos; p++){
+          locs.push(`${rackStr}0${l}${String(p).padStart(2,'0')}`);
+        }
+      }
+    }
+    return locs.filter(isValidLocation);
+  }
+
+  function initEngine(rawFilteredData, rawItemsData) {
+    filtered = rawFilteredData || [];
+    items = rawItemsData || {};
+    itemCodes = Object.keys(items);
+
+    locIndex = {};
+    for(let i=0; i<itemCodes.length; i++){
+      const code = itemCodes[i];
+      const [name, total, locs] = items[code];
+      for(let j=0; j<locs.length; j++){
+        const [loc, q] = locs[j];
+        if(!locIndex[loc]) locIndex[loc] = {items:[], uniqueCount:0, totalQty:0};
+        locIndex[loc].items.push({c:code, n:name, q:q});
+      }
+    }
+    Object.keys(locIndex).forEach(loc=>{
+      const e = locIndex[loc];
+      e.uniqueCount = e.items.length;
+      e.totalQty = e.items.reduce((s,i)=>s+i.q,0);
+    });
+
+    racks = buildRacks();
+    putaway = buildPutaway();
+    relok = buildRelok();
+    kpis = calculateKPIs();
+    zoneStats = calculateZoneStats();
+
+    document.getElementById('meta-total-locs').textContent = fmt(kpis.total);
+    document.getElementById('meta-items').textContent = fmt(itemCodes.length);
+
+    updateRackSelect();
+    renderDashboard();
+    renderRackHeatmap();
+    renderRackTable();
+    renderPutaway();
+    renderRelok();
+    renderMonitorRack();
+  }
+
+  function buildRacks(){
+    const rMap = {};
+    filtered.forEach(([loc,qty,rack])=>{
+      if(!rMap[rack]) rMap[rack] = {rack, total:0, occupied:0, empty:0, low:0, qty:0};
+      const r = rMap[rack];
+      r.total++; r.qty += qty;
+      if(qty===0) r.empty++; else r.occupied++;
+      if(qty===1) r.low++;
+    });
+    return Object.values(rMap).map(r=>{
+      const occPct = r.total ? Math.round((r.occupied/r.total)*1000)/10 : 0;
+      const emptyPct = r.total ? Math.round((r.empty/r.total)*1000)/10 : 0;
+      const lowPct = r.total ? Math.round((r.low/r.total)*1000)/10 : 0;
+      const score = r.empty*3 + r.low;
+      return Object.assign({}, r, {occPct, emptyPct, lowPct, score});
+    }).sort((a,b)=>a.rack.localeCompare(b.rack, undefined, {numeric:true}));
+  }
+
+  function buildPutaway(){
+    const out = [];
+    filtered.forEach(([loc,qty,rack])=>{
+      if(qty===0) out.push({loc, rack, qty, priority:'CRITICAL_EMPTY'});
+      else if(qty===1) out.push({loc, rack, qty, priority:'LOW_STOCK'});
+    });
+    out.sort((a,b)=>{
+      const order = {CRITICAL_EMPTY:0, LOW_STOCK:1};
+      return order[a.priority]-order[b.priority] || a.loc.localeCompare(b.loc, undefined, {numeric:true});
+    });
+    return out;
+  }
+
+  function buildRelok(){
+    const out = [];
+    itemCodes.forEach(code=>{
+      const [name, total, locs] = items[code];
+      if(!locs || locs.length < 1) return;
+      locs.forEach(([loc,qty])=>{
+        if(qty === 1){
+          const others = locs.filter(l=>l[0]!==loc).sort((a,b)=>b[1]-a[1]);
+          const target = others.length ? others[0] : null;
+          out.push({loc, code, name, qty, target: target ? target[0] : null, targetQty: target ? target[1] : null});
+        }
+      });
+    });
+    out.sort((a,b)=> (b.targetQty||0) - (a.targetQty||0));
+    return out;
+  }
+
+  function calculateKPIs(){
+    let total=0, occupied=0, empty=0, low=0, totalQty=0;
+    filtered.forEach(([loc,qty])=>{
+      total++; totalQty += qty;
+      if(qty===0) empty++; else occupied++;
+      if(qty===1) low++;
+    });
+    return {
+      total, occupied, empty, low, totalQty,
+      occupancyPct: total ? Math.round((occupied/total)*1000)/10 : 0
+    };
+  }
+
+  function calculateZoneStats(){
+    const z = {C:{total:0,occupied:0,empty:0,qty:0}, D:{total:0,occupied:0,empty:0,qty:0}};
+    filtered.forEach(([loc,qty])=>{
+      const zone = loc.charAt(0);
+      if(!z[zone]) return;
+      z[zone].total++; z[zone].qty+=qty;
+      if(qty===0) z[zone].empty++; else z[zone].occupied++;
+    });
+    return z;
+  }
+
+  function fmt(n){
+    if(n===null||n===undefined) return "–";
+    return n.toLocaleString('pl-PL', {maximumFractionDigits:2});
+  }
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function tileColor(occPct){
+    if(occPct >= 95) return {bg:'rgba(255,92,92,0.18)', fg:'#ff8080', border:'rgba(255,92,92,0.35)'};
+    if(occPct >= 80) return {bg:'rgba(255,157,46,0.16)', fg:'#ffb15c', border:'rgba(255,157,46,0.3)'};
+    if(occPct >= 55) return {bg:'rgba(255,207,86,0.13)', fg:'#ffdb8a', border:'rgba(255,207,86,0.25)'};
+    return {bg:'rgba(89,209,138,0.14)', fg:'#7fe0a8', border:'rgba(89,209,138,0.28)'};
+  }
+
+  const tabButtons = document.querySelectorAll('.tab-btn');
+  const views = document.querySelectorAll('.view');
+  tabButtons.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      tabButtons.forEach(b=>b.classList.remove('active'));
+      views.forEach(v=>v.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('view-'+btn.dataset.tab).classList.add('active');
+      if(btn.dataset.tab === 'dashboard') renderDashboard();
+    });
+  });
+
+  function renderDashboard(){
+    document.getElementById('kpi-total').textContent = fmt(kpis.total);
+    document.getElementById('kpi-occupied').textContent = fmt(kpis.occupied);
+    document.getElementById('kpi-occupied-sub').textContent = (kpis.occupancyPct||0) + '% obłożenia';
+    document.getElementById('kpi-empty').textContent = fmt(kpis.empty);
+    document.getElementById('kpi-empty-sub').textContent = (kpis.total ? (Math.round((kpis.empty/kpis.total)*1000)/10) : 0) + '% lokacji';
+    document.getElementById('kpi-low').textContent = fmt(kpis.low);
+    document.getElementById('kpi-qty').textContent = fmt(Math.round(kpis.totalQty||0));
+    document.getElementById('kpi-racks').textContent = racks.length;
+
+    const top = [...racks].sort((a,b)=>b.score-a.score).slice(0,8);
+    const maxScore = Math.max(...top.map(r=>r.score), 1);
+    const barsHtml = top.map(r=>{
+      const pct = Math.round((r.score/maxScore)*100);
+      const col = r.score>=100 ? 'var(--danger)' : r.score>=50 ? 'var(--amber)' : 'var(--warning)';
+      return `<div class="bar-row">
+        <div class="rlabel">${r.rack}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${col}"></div></div>
+        <div class="rval">${r.empty} pustych / ${r.low} low</div>
+      </div>`;
+    }).join('');
+    document.getElementById('top-racks-bars').innerHTML = barsHtml;
+
+    const occNoLow = (kpis.occupied||0) - (kpis.low||0);
+    const tot = kpis.total || 1;
+    const pOcc = (occNoLow/tot)*100;
+    const pLow = ((kpis.low||0)/tot)*100;
+    const donut = document.getElementById('donut');
+    donut.style.background = `conic-gradient(
+      var(--ok) 0 ${pOcc}%,
+      var(--warning) ${pOcc}% ${pOcc+pLow}%,
+      var(--danger) ${pOcc+pLow}% 100%)`;
+    document.getElementById('donut-center').innerHTML = `<b>${kpis.occupancyPct||0}%</b><span>obłożenie</span>`;
+
+    const zc = document.getElementById('zone-compare');
+    zc.innerHTML = ['C','D'].map(z=>{
+      const s = zoneStats[z] || {total:0, occupied:0};
+      const pct = s.total ? Math.round((s.occupied/s.total)*1000)/10 : 0;
+      return `<div class="bar-row">
+        <div class="rlabel">Strefa ${z}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:var(--cyan)"></div></div>
+        <div class="rval">${pct}% (${fmt(s.total)} lok.)</div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderRackHeatmap(){
+    const grid = document.getElementById('rack-heatmap');
+    grid.innerHTML = racks.map(r=>{
+      const c = tileColor(r.occPct);
+      return `<div class="rack-tile" style="background:${c.bg};color:${c.fg};border-color:${c.border}"
+                data-rack="${r.rack}" title="${r.rack}: ${r.occPct}% obłożenia, ${r.empty} pustych">
+                <div class="rt-name">${r.rack}</div>
+                <div class="rt-occ">${r.occPct}%</div>
+              </div>`;
+    }).join('');
+    grid.querySelectorAll('.rack-tile').forEach(t=>{
+      t.addEventListener('click', ()=>{
+        document.querySelector('.tab-btn[data-tab="monitor"]').click();
+        selectRackInMonitor(t.dataset.rack);
+      });
+    });
+  }
+
+  function renderRackTable(){
+    const tbody = document.getElementById('rack-table-body');
+    const sorted = [...racks].sort((a,b)=>{
+      let va=a[rackSort.col], vb=b[rackSort.col];
+      if(typeof va === 'string') return va.localeCompare(vb, undefined, {numeric:true}) * rackSort.dir;
+      return (va-vb) * rackSort.dir;
+    });
+    tbody.innerHTML = sorted.map(r=>{
+      const badgeCol = r.occPct>=95 ? 'badge-critical' : r.occPct>=80 ? 'badge-low' : 'badge-ok';
+      return `<tr>
+        <td><b>${r.rack}</b></td>
+        <td>${r.total}</td>
+        <td>${r.occupied}</td>
+        <td>${r.empty}</td>
+        <td>${r.low}</td>
+        <td><span class="badge ${badgeCol}">${r.occPct}%</span></td>
+        <td>${r.emptyPct}%</td>
+        <td>${r.lowPct}%</td>
+        <td>${r.score}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  document.querySelectorAll('#rack-table thead th').forEach(th=>{
+    th.addEventListener('click', ()=>{
+      const col = th.dataset.col;
+      if(!col) return;
+      if(rackSort.col===col) rackSort.dir *= -1; else { rackSort.col=col; rackSort.dir=1; }
+      document.querySelectorAll('#rack-table thead th').forEach(h=>h.classList.remove('sorted'));
+      th.classList.add('sorted');
+      renderRackTable();
+    });
+  });
+
+  function renderPutaway(){
+    let rows = putaway;
+    if(putawayFilter !== 'ALL') rows = rows.filter(r=>r.priority===putawayFilter);
+    if(putawayQuery){
+      const q = putawayQuery.toUpperCase();
+      rows = rows.filter(r=>r.loc.includes(q) || r.rack.includes(q));
+    }
+    document.getElementById('putaway-count').textContent = rows.length.toLocaleString('pl-PL') + ' pozycji';
+    const LIMIT = 500;
+    const shown = rows.slice(0, LIMIT);
+    const tbody = document.getElementById('putaway-table-body');
+    tbody.innerHTML = shown.map(r=>{
+      const badge = r.priority==='CRITICAL_EMPTY' ? '<span class="badge badge-critical">PUSTA</span>' : '<span class="badge badge-low">QTY=1</span>';
+      return `<tr><td><b>${r.loc}</b></td><td>${r.rack}</td><td>${r.qty}</td><td>${badge}</td></tr>`;
+    }).join('');
+    document.getElementById('putaway-more').textContent = rows.length > LIMIT
+      ? `Pokazano pierwsze ${LIMIT} z ${rows.length.toLocaleString('pl-PL')} — zawęź wyszukiwanie, aby zobaczyć więcej.`
+      : '';
+  }
+  document.querySelectorAll('.putaway-chip').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      document.querySelectorAll('.putaway-chip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      putawayFilter = chip.dataset.filter;
+      renderPutaway();
+    });
+  });
+  document.getElementById('putaway-search').addEventListener('input', (e)=>{
+    putawayQuery = e.target.value.trim();
+    renderPutaway();
+  });
+
+  function renderRelok(){
+    let rows = relok;
+    if(relokOnlyActionable) rows = rows.filter(r=>r.target);
+    if(relokQuery){
+      const q = relokQuery.toUpperCase();
+      rows = rows.filter(r=> r.loc.includes(q) || r.code.toUpperCase().includes(q) || r.name.toUpperCase().includes(q));
+    }
+    document.getElementById('relok-count').textContent = rows.length.toLocaleString('pl-PL') + ' pozycji';
+    document.getElementById('relok-total-badge').textContent = relok.length.toLocaleString('pl-PL') + ' lokacji z ostatnią sztuką';
+    const LIMIT = 500;
+    const shown = rows.slice(0, LIMIT);
+    const tbody = document.getElementById('relok-table-body');
+    tbody.innerHTML = shown.map(r=>{
+      const target = r.target
+        ? `<span class="badge badge-ok">${r.target} (${fmt(r.targetQty)} szt.)</span>`
+        : `<span class="badge" style="background:var(--surface3);color:var(--muted)">brak</span>`;
+      return `<tr>
+        <td><b>${r.loc}</b></td>
+        <td>${escapeHtml(r.code)}</td>
+        <td>${escapeHtml(r.name)}</td>
+        <td>1</td>
+        <td>${target}</td>
+      </tr>`;
+    }).join('');
+    document.getElementById('relok-more').textContent = rows.length > LIMIT
+      ? `Pokazano pierwsze ${LIMIT} z ${rows.length.toLocaleString('pl-PL')} — zawęź wyszukiwanie, aby zobaczyć więcej.`
+      : '';
+  }
+  document.getElementById('relok-search').addEventListener('input', (e)=>{
+    relokQuery = e.target.value.trim();
+    renderRelok();
+  });
+  document.getElementById('relok-toggle').addEventListener('click', (e)=>{
+    relokOnlyActionable = !relokOnlyActionable;
+    e.target.classList.toggle('active', relokOnlyActionable);
+    e.target.textContent = relokOnlyActionable ? 'Tylko z propozycją konsolidacji' : 'Wszystkie ostatnie sztuki';
+    renderRelok();
+  });
+
+  function updateRackSelect(){
+    const rackSelect = document.getElementById('monitor-rack-select');
+    rackSelect.innerHTML = racks.map(r=>`<option value="${r.rack}">${r.rack}</option>`).join('');
+  }
+
+  function selectRackInMonitor(rackCode){
+    const rackSelect = document.getElementById('monitor-rack-select');
+    rackSelect.value = rackCode;
+    renderMonitorRack();
+  }
+
+  function renderMonitorRack(){
+    const rackSelect = document.getElementById('monitor-rack-select');
+    const rack = rackSelect.value;
+    if(!rack) return;
+    const emptyLocs = filtered.filter(([loc,qty,r])=> r===rack && qty===0).map(([loc])=>loc);
+    const rackInfo = racks.find(r=>r.rack===rack);
+    document.getElementById('monitor-free-count').textContent = emptyLocs.length;
+    document.getElementById('monitor-rack-occ').textContent = (rackInfo? rackInfo.occPct : 0) + '%';
+    document.getElementById('monitor-rack-total').textContent = rackInfo ? rackInfo.total : 0;
+    const list = document.getElementById('monitor-empty-list');
+    if(emptyLocs.length){
+      list.innerHTML = emptyLocs.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}))
+        .map(l=>`<span class="loc-pill">${l}</span>`).join('');
+    } else {
+      list.innerHTML = `<div class="empty-state">Brak wolnych lokacji w tym regale.</div>`;
+    }
+  }
+  document.getElementById('monitor-rack-select').addEventListener('change', renderMonitorRack);
+
+  const itemInput = document.getElementById('monitor-item-input');
+  const acResults = document.getElementById('monitor-ac-results');
+
+  function searchItems(q){
+    q = q.trim().toUpperCase();
+    if(!q) return [];
+    const starts = [], contains = [];
+    for(let i=0;i<itemCodes.length;i++){
+      const code = itemCodes[i];
+      const name = items[code][0];
+      const codeU = code.toUpperCase();
+      const nameU = (name||'').toUpperCase();
+      if(codeU.startsWith(q)) starts.push(code);
+      else if(codeU.includes(q) || nameU.includes(q)) contains.push(code);
+      if(starts.length >= 20) break;
+    }
+    return starts.concat(contains).slice(0,20);
+  }
+
+  itemInput.addEventListener('input', ()=>{
+    const q = itemInput.value;
+    if(!q.trim()){ acResults.classList.remove('show'); return; }
+    const matches = searchItems(q);
+    if(!matches.length){ acResults.innerHTML = `<div class="ac-row" style="cursor:default;color:var(--muted)">Brak wyników</div>`; acResults.classList.add('show'); return; }
+    acResults.innerHTML = matches.map(code=>{
+      const [name] = items[code];
+      return `<div class="ac-row" data-code="${escapeHtml(code)}">
+        <div class="code">${escapeHtml(code)}</div>
+        <div class="name">${escapeHtml(name||'')}</div>
+      </div>`;
+    }).join('');
+    acResults.classList.add('show');
+  });
+  acResults.addEventListener('click', (e)=>{
+    const row = e.target.closest('.ac-row');
+    if(!row || !row.dataset.code) return;
+    itemInput.value = row.dataset.code;
+    acResults.classList.remove('show');
+    renderItemResult(row.dataset.code);
+  });
+  document.addEventListener('click', (e)=>{
+    if(!e.target.closest('.autocomplete')) acResults.classList.remove('show');
+  });
+
+  function inZoneRange(loc){
+    return loc >= "C03" && loc <= "D199999";
+  }
+
+  function suggestLocationForItem(code){
+    const entry = items[code];
+    if(!entry) return null;
+    const locs = entry[2];
+    const inRange = locs.filter(([loc])=>inZoneRange(loc));
+    const existing = inRange.find(([loc])=> (locIndex[loc] ? locIndex[loc].uniqueCount : 0) <= 10);
+    if(existing) return {loc: existing[0], type:'existing'};
+    const emptyCandidate = filtered
+      .filter(([loc,qty])=> qty===0 && inZoneRange(loc))
+      .sort((a,b)=>a[0].localeCompare(b[0], undefined, {numeric:true}))[0];
+    return emptyCandidate ? {loc: emptyCandidate[0], type:'empty'} : null;
+  }
+
+  function nearestEmptyInSameRack(loc){
+    const rack = loc.slice(0,3);
+    const midDigit = parseInt(loc.charAt(loc.length-3), 10);
+    const lastTwo = parseInt(loc.slice(-2), 10);
+    const emptyInRack = filtered.filter(([l,q,r])=> r===rack && q===0);
+    if(!emptyInRack.length) return null;
+    let best=null, bestDist=Infinity;
+    emptyInRack.forEach(([l])=>{
+      const m = parseInt(l.charAt(l.length-3), 10);
+      const lt = parseInt(l.slice(-2), 10);
+      if(isNaN(m) || isNaN(lt)) return;
+      const dist = Math.abs(lt-lastTwo) + Math.abs(m-midDigit);
+      if(dist < bestDist){ bestDist = dist; best = l; }
+    });
+    return best;
+  }
+
+  function renderItemResult(code){
+    const entry = items[code];
+    const card = document.getElementById('monitor-result-card');
+    if(!entry){ card.style.display='none'; return; }
+    const [name, total, locs] = entry;
+    card.style.display = 'block';
+    document.getElementById('mr-name').textContent = name || '(brak nazwy)';
+    document.getElementById('mr-code').textContent = code;
+    document.getElementById('mr-total').textContent = fmt(total);
+    document.getElementById('mr-loccount').textContent = locs.length;
+
+    const sortedLocs = [...locs].sort((a,b)=>b[1]-a[1]);
+    document.getElementById('mr-locs-body').innerHTML = sortedLocs.map(([loc,qty])=>{
+      const li = locIndex[loc] || {uniqueCount:0, totalQty:0};
+      return `<tr><td><b>${loc}</b></td><td>${fmt(qty)}</td><td>${li.uniqueCount}</td><td>${fmt(li.totalQty)}</td></tr>`;
+    }).join('');
+
+    const suggestion = suggestLocationForItem(code);
+    const sBox = document.getElementById('mr-suggestion');
+    if(suggestion){
+      sBox.innerHTML = suggestion.type==='existing'
+        ? `📌 Sugerowana lokacja do dołożenia: <b>${suggestion.loc}</b> (ten item już tam jest, lokacja nie jest przeładowana)`
+        : `📌 Sugerowana lokacja do dołożenia: <b>${suggestion.loc}</b> (najbliższa pusta lokacja w strefie C03–D19)`;
+    } else {
+      sBox.innerHTML = `Brak sugestii — brak wolnych lokacji w strefie C03–D19.`;
+    }
+
+    const firstLoc = locs[0] ? locs[0][0] : null;
+    const nearBox = document.getElementById('mr-nearest');
+    if(firstLoc){
+      const nearest = nearestEmptyInSameRack(firstLoc);
+      nearBox.innerHTML = nearest
+        ? `📍 Najbliższa wolna lokacja w regale <b>${firstLoc.slice(0,3)}</b> (licząc od ${firstLoc}): <b>${nearest}</b>`
+        : `Brak wolnych lokacji w regale ${firstLoc.slice(0,3)}.`;
+    } else {
+      nearBox.innerHTML = '';
+    }
+  }
+
+  const locInput = document.getElementById('monitor-loc-input');
+  document.getElementById('monitor-loc-search-btn').addEventListener('click', ()=>{
+    const loc = locInput.value.trim().toUpperCase();
+    const m = loc.match(/^([CD]\d{2})/);
+    const out = document.getElementById('monitor-nearby-result');
+    if(!m){ out.innerHTML = `<div class="empty-state">Podaj poprawny kod lokacji, np. C070204</div>`; return; }
+    const rack = m[1];
+    selectRackInMonitor(rack);
+    const rows = filtered.filter(([l,q,r])=>r===rack).sort((a,b)=>a[0].localeCompare(b[0],undefined,{numeric:true}));
+    out.innerHTML = `<div class="scroll-body" style="max-height:260px">
+      <table><thead><tr><th>Lokacja</th><th>Qty</th><th>Status</th></tr></thead>
+      <tbody>${rows.map(([l,q])=>{
+        const status = q===0 ? '<span class="badge badge-critical">PUSTA</span>' : q===1 ? '<span class="badge badge-low">QTY=1</span>' : '<span class="badge badge-ok">OK</span>';
+        const hl = l===loc ? 'style="background:var(--surface3)"' : '';
+        return `<tr ${hl}><td><b>${l}</b></td><td>${q}</td><td>${status}</td></tr>`;
+      }).join('')}</tbody></table>
+    </div>`;
+  });
+
+  /* ============================================================
+     SILNIK PARSOWANIA I LOGIKI SKRYPTU EXCEL / RAW_DATA
+     ============================================================ */
+  function parseAndProcessWorkbook(workbook) {
+    let allLocations = [];
+
+    // 1. Sprawdzamy czy plik zawiera dedykowaną zakładkę ALL_LOC
+    if(workbook.SheetNames.includes("ALL_LOC")){
+      const sheet = workbook.Sheets["ALL_LOC"];
+      const jsonAllLoc = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      for(let i=1; i<jsonAllLoc.length; i++){
+        if(jsonAllLoc[i] && jsonAllLoc[i][0]){
+          const l = String(jsonAllLoc[i][0]).trim();
+          if(isValidLocation(l)) allLocations.push(l);
+        }
+      }
+    }
+
+    // Jeśli brak arkusza ALL_LOC, generujemy automatycznie pełną listę lokacji wzorcowych (6547)
+    if(allLocations.length === 0){
+      allLocations = generateDefaultAllLocations();
+    }
+
+    // 2. Szukamy odpowiedniej zakładki z danymi źródłowymi
+    let rawSheet = null;
+    if(workbook.SheetNames.includes("RAW_DATA")) rawSheet = workbook.Sheets["RAW_DATA"];
+    else if(workbook.SheetNames.includes("FILTERED_STOCK")) rawSheet = workbook.Sheets["FILTERED_STOCK"];
+    else rawSheet = workbook.Sheets[workbook.SheetNames[0]];
+
+    const rawRows = XLSX.utils.sheet_to_json(rawSheet, { header: 1 });
+    if (!rawRows || rawRows.length === 0) {
+      alert("Plik nie zawiera danych.");
+      return;
+    }
+
+    let stockMap = {};
+    let newItems = {};
+
+    // Wykrywanie nagłówków
+    let whIdx = -1, zoneIdx = -1, locIdx = -1, itemIdx = -1, nameIdx = -1, qtyIdx = -1;
+    const headerRow = rawRows[0] || [];
+    headerRow.forEach((h, idx) => {
+      const colName = String(h || '').trim().toLowerCase();
+      if(colName === 'warehouse') whIdx = idx;
+      if(colName === 'storage zone') zoneIdx = idx;
+      if(colName === 'location') locIdx = idx;
+      if(colName === 'item') itemIdx = idx;
+      if(colName === 'item.1' || colName === 'item name') nameIdx = idx;
+      if(colName === 'inventory on hand' || colName === 'qty') qtyIdx = idx;
+    });
+
+    // Domyślny układ indeksów (RAW_DATA)
+    if(locIdx === -1) locIdx = 2;
+    if(qtyIdx === -1) qtyIdx = 8;
+    if(whIdx === -1) whIdx = 0;
+    if(zoneIdx === -1) zoneIdx = 1;
+    if(itemIdx === -1) itemIdx = 3;
+    if(nameIdx === -1) nameIdx = 4;
+
+    // Przetwarzanie i filtrowanie wierszy zgodnie z AppScript
+    for (let i = 1; i < rawRows.length; i++) {
+      const row = rawRows[i];
+      if (!row || row.length === 0) continue;
+
+      let warehouse = whIdx >= 0 ? String(row[whIdx] || '').trim() : "WB0110";
+      let zone = zoneIdx >= 0 ? String(row[zoneIdx] || '').trim() : "STD";
+      let loc = String(row[locIdx] || '').trim();
+      let code = itemIdx >= 0 ? String(row[itemIdx] || '').trim() : "";
+      let name = nameIdx >= 0 ? String(row[nameIdx] || '').trim() : "";
+      let rawQty = row[qtyIdx];
+
+      // Filtrujemy dokładnie tak jak skrypt AppScript: WB0110 + STD + Prawidłowa lokacja C/D
+      if (whIdx >= 0 && headerRow.length > 5 && warehouse !== "WB0110") continue;
+      if (zoneIdx >= 0 && headerRow.length > 5 && zone !== "STD") continue;
+      if (!isValidLocation(loc)) continue;
+
+      let qty = 0;
+      if (typeof rawQty === 'number') {
+        qty = rawQty;
+      } else if (typeof rawQty === 'string') {
+        let cleanStr = rawQty.replace(/\s/g, "").replace(',', '.');
+        qty = parseFloat(cleanStr) || 0;
+      }
+
+      stockMap[loc] = (stockMap[loc] || 0) + qty;
+
+      if (code && qty > 0) {
+        if (!newItems[code]) {
+          newItems[code] = [name, 0, []];
+        }
+        newItems[code][1] += qty;
+        newItems[code][2].push([loc, qty]);
+      }
+    }
+
+    // Budowanie FILTERED_STOCK na bazie 6547 lokacji wzorcowych
+    const newFiltered = [];
+    for (let i = 0; i < allLocations.length; i++) {
+      const loc = allLocations[i];
+      const qty = stockMap[loc] !== undefined ? stockMap[loc] : 0;
+      newFiltered.push([loc, qty, getRack(loc)]);
+    }
+
+    newFiltered.sort((a,b) => a[0].localeCompare(b[0], undefined, {numeric:true}));
+
+    initEngine(newFiltered, newItems);
+    alert('Import i przeliczenie raportu zakończone sukcesem!');
+  }
+
+  // Wczytywanie pliku wybranego przez użytkownika (XLSX, XLS, CSV)
+  document.getElementById('excel-file-input').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+      const data = new Uint8Array(evt.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      parseAndProcessWorkbook(workbook);
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
+  // Startowa inicjalizacja z wbudowaną bazą lokacji
+  const defaultLocs = generateDefaultAllLocations();
+  const initialFiltered = defaultLocs.map(l => [l, 0, getRack(l)]);
+  initEngine(initialFiltered, {});
+
+})();
+</script>
+</body>
+</html>
