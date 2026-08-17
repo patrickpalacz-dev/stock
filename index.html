@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WMS PRO · Kalmar Stock Point Dashboard</title>
-<!-- Biblioteka SheetJS do bezbłędnej obsługi plików XLSX i XLS -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
@@ -142,7 +141,6 @@ a{ color:var(--cyan); }
 .section-title .eyebrow{ font-family:var(--mono); font-size:11px; color:var(--amber); letter-spacing:0.08em; }
 .section-sub{ color:var(--muted); font-size:12.5px; margin:-8px 0 16px 0; }
 
-/* KPI cards */
 .kpi-grid{ display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:22px; }
 .kpi{
   background:var(--surface); border:1px solid var(--border); border-radius:10px;
@@ -160,7 +158,6 @@ a{ color:var(--cyan); }
 .panel h3{ margin:0 0 4px 0; font-size:13px; letter-spacing:0.03em; }
 .panel .desc{ font-size:11.5px; color:var(--muted); margin:0 0 14px 0; }
 
-/* bars */
 .bar-row{ display:flex; align-items:center; gap:10px; margin-bottom:9px; }
 .bar-row .rlabel{ width:38px; font-family:var(--mono); font-size:11.5px; color:var(--muted); flex:none; }
 .bar-track{ flex:1; height:16px; background:var(--surface2); border-radius:4px; overflow:hidden; position:relative; }
@@ -175,7 +172,6 @@ a{ color:var(--cyan); }
 .legend-item{ display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--muted); font-family:var(--mono); }
 .legend-dot{ width:9px; height:9px; border-radius:2px; }
 
-/* Rack heatmap */
 .rack-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); gap:6px; }
 .rack-tile{
   border-radius:6px; padding:8px 6px; text-align:center; cursor:pointer;
@@ -187,7 +183,6 @@ a{ color:var(--cyan); }
 .rack-tile .rt-name{ font-size:12px; font-weight:700; }
 .rack-tile .rt-occ{ font-size:10px; opacity:0.85; margin-top:2px; }
 
-/* tables */
 .table-wrap{ background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
 table{ width:100%; border-collapse:collapse; font-size:12.5px; }
 thead th{
@@ -237,7 +232,6 @@ select.select-native{
 
 .count-tag{ font-family:var(--mono); font-size:11px; color:var(--muted); margin-left:auto; white-space:nowrap; }
 
-/* WMS monitor layout */
 .monitor-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
 .stat-row{ display:flex; gap:12px; margin:12px 0; }
 .mini-stat{
@@ -309,17 +303,15 @@ footer.appfoot{
     <button class="tab-btn" data-tab="monitor">WMS Monitor</button>
   </div>
   <div class="import-group">
-    <!-- 🔥 PRZYCISK POBIERANIA Z GOOGLE DRIVE -->
     <button class="drive-btn" id="btn-fetch-drive" onclick="fetchFromGoogleDrive()">
-      🔄 Pobierz z Google Drive
+      🔄 Pobierz najświeższe dane z Drive
     </button>
-    <!-- RĘCZNE WGRYWANIE PLIKU z DYSKU KMOPUTERA -->
     <label class="import-btn">
-      📊 Wgraj Plik z Komputera
+      📊 Wgraj Plik Z Komputera
       <input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv" style="display:none;">
     </label>
   </div>
-  <div class="status-pill"><span class="dot"></span> Snapshot danych · <span id="meta-total-locs">–</span> lokacji · <span id="meta-items">–</span> itemów</div>
+  <div class="status-pill"><span class="dot"></span> Snapshot: <span id="last-update-time">Brak danych</span> · <span id="meta-total-locs">–</span> lokacji · <span id="meta-items">–</span> itemów</div>
 </div>
 
 <div class="wrap">
@@ -504,46 +496,43 @@ footer.appfoot{
 
 </div>
 
-<footer class="appfoot">WMS PRO · Silnik dynamicznego raportowania i przeliczania XLSX/CSV</footer>
+<footer class="appfoot">WMS PRO · Silnik dynamicznego raportowania z automatycznym zapamiętywaniem stanu</footer>
 
 <script>
-// Zmienna globalna dla funkcji pobierającej z Drive
-let parseAndProcessWorkbookGlobal = null;
+// Podpięty bezpośrenio Twój URL z wygenerowanego Apps Script
+const GOOGLE_SCRIPT_WEB_APP_URL = "https://script.google.com/a/macros/kalmarglobal.com/s/AKfycbwzuD8lkyPG6oTdqSLm6Skr8zGajWsY3fCSubxldtWC4WZ5XdgPUp4e3ZT81N8pTRqxdg/exec";
 
-// ID Twojego pliku ze wskazanego linku:
-const GOOGLE_FILE_ID = "12pCVpowRQnICjzdSDIYSD5kCc_kw1zEWZOfnNmZtbqs";
-const DRIVE_DOWNLOAD_URL = `https://docs.google.com/spreadsheets/d/${GOOGLE_FILE_ID}/export?format=xlsx`;
+let processRawMatrixGlobal = null;
 
 async function fetchFromGoogleDrive() {
   const btn = document.getElementById('btn-fetch-drive');
   const originalText = btn.innerText;
 
   try {
-    btn.innerText = "⏳ Pobieranie z Drive...";
+    btn.innerText = "⏳ Pobieranie z Google Drive...";
     btn.disabled = true;
 
-    const response = await fetch(DRIVE_DOWNLOAD_URL);
-    if (!response.ok) {
-      throw new Error("Błąd sieci lub brak dostępu. Upewnij się, że jesteś zalogowany na konto Kalmar w przeglądarce.");
+    const response = await fetch(GOOGLE_SCRIPT_WEB_APP_URL);
+    if (!response.ok) throw new Error("Błąd połączenia z serwerem danych.");
+
+    const resJson = await response.json();
+    if (resJson.status === "success" && resJson.data) {
+      if (processRawMatrixGlobal) {
+        processRawMatrixGlobal(resJson.data);
+      }
+      btn.innerText = "✅ Załadowano!";
+    } else {
+      throw new Error("Nieprawidłowy format danych z Google Apps Script.");
     }
 
-    const arrayBuffer = await response.arrayBuffer();
-    const data = new Uint8Array(arrayBuffer);
-    const workbook = XLSX.read(data, { type: 'array' });
-
-    if (parseAndProcessWorkbookGlobal) {
-      parseAndProcessWorkbookGlobal(workbook);
-    }
-
-    btn.innerText = "✅ Załadowano!";
     setTimeout(() => {
       btn.innerText = originalText;
       btn.disabled = false;
     }, 3000);
 
   } catch (error) {
-    console.error("Błąd pobierania:", error);
-    alert("Nie udało się pobrać pliku z Google Drive: " + error.message);
+    console.error("Błąd pobierania danych:", error);
+    alert("Nie udało się pobrać danych: " + error.message);
     btn.innerText = originalText;
     btn.disabled = false;
   }
@@ -568,7 +557,6 @@ async function fetchFromGoogleDrive() {
   let relokQuery = '';
   let relokOnlyActionable = true;
 
-  // Sprawdzanie walidacji lokacji zgodne z AppScript (Strefa C: 01-99, Strefa D: 01-19)
   function isValidLocation(loc){
     if(!loc) return false;
     loc = String(loc).trim().toUpperCase();
@@ -586,7 +574,6 @@ async function fetchFromGoogleDrive() {
     return m ? m[1] : "";
   }
 
-  // Generowanie pełnego spisu 6547 lokacji wzorcowych w przepadku braku dedykowanego sheetu ALL_LOC
   function generateDefaultAllLocations(){
     const locs = [];
     for(let r=1; r<=10; r++){
@@ -650,7 +637,7 @@ async function fetchFromGoogleDrive() {
     return locs.filter(isValidLocation);
   }
 
-  function initEngine(rawFilteredData, rawItemsData) {
+  function initEngine(rawFilteredData, rawItemsData, timestamp) {
     filtered = rawFilteredData || [];
     items = rawItemsData || {};
     itemCodes = Object.keys(items);
@@ -679,6 +666,9 @@ async function fetchFromGoogleDrive() {
 
     document.getElementById('meta-total-locs').textContent = fmt(kpis.total);
     document.getElementById('meta-items').textContent = fmt(itemCodes.length);
+    if (timestamp) {
+      document.getElementById('last-update-time').textContent = timestamp;
+    }
 
     updateRackSelect();
     renderDashboard();
@@ -1122,38 +1112,10 @@ async function fetchFromGoogleDrive() {
     </div>`;
   });
 
-  /* ============================================================
-     SILNIK PARSOWANIA I LOGIKI SKRYPTU EXCEL / RAW_DATA
-     ============================================================ */
-  function parseAndProcessWorkbook(workbook) {
-    let allLocations = [];
+  function processRawRowsMatrix(rawRows) {
+    if (!rawRows || rawRows.length === 0) return;
 
-    if(workbook.SheetNames.includes("ALL_LOC")){
-      const sheet = workbook.Sheets["ALL_LOC"];
-      const jsonAllLoc = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-      for(let i=1; i<jsonAllLoc.length; i++){
-        if(jsonAllLoc[i] && jsonAllLoc[i][0]){
-          const l = String(jsonAllLoc[i][0]).trim();
-          if(isValidLocation(l)) allLocations.push(l);
-        }
-      }
-    }
-
-    if(allLocations.length === 0){
-      allLocations = generateDefaultAllLocations();
-    }
-
-    let rawSheet = null;
-    if(workbook.SheetNames.includes("RAW_DATA")) rawSheet = workbook.Sheets["RAW_DATA"];
-    else if(workbook.SheetNames.includes("FILTERED_STOCK")) rawSheet = workbook.Sheets["FILTERED_STOCK"];
-    else rawSheet = workbook.Sheets[workbook.SheetNames[0]];
-
-    const rawRows = XLSX.utils.sheet_to_json(rawSheet, { header: 1 });
-    if (!rawRows || rawRows.length === 0) {
-      alert("Plik nie zawiera danych.");
-      return;
-    }
-
+    let allLocations = generateDefaultAllLocations();
     let stockMap = {};
     let newItems = {};
 
@@ -1187,7 +1149,6 @@ async function fetchFromGoogleDrive() {
       let name = nameIdx >= 0 ? String(row[nameIdx] || '').trim() : "";
       let rawQty = row[qtyIdx];
 
-      // Ochrona zamiany kolumn Storage Zone / Location
       if (!isValidLocation(loc) && isValidLocation(zone)) {
         loc = zone;
         zone = "STD";
@@ -1224,13 +1185,21 @@ async function fetchFromGoogleDrive() {
 
     newFiltered.sort((a,b) => a[0].localeCompare(b[0], undefined, {numeric:true}));
 
-    initEngine(newFiltered, newItems);
+    const now = new Date().toLocaleTimeString('pl-PL', {hour: '2-digit', minute:'2-digit'});
+
+    try {
+      localStorage.setItem('wms_cache_filtered', JSON.stringify(newFiltered));
+      localStorage.setItem('wms_cache_items', JSON.stringify(newItems));
+      localStorage.setItem('wms_cache_time', now);
+    } catch(e) {
+      console.warn("Storage full / blocked", e);
+    }
+
+    initEngine(newFiltered, newItems, now);
   }
 
-  // Udostępniamy funkcję do zasięgu globalnego dla przycisku Google Drive
-  parseAndProcessWorkbookGlobal = parseAndProcessWorkbook;
+  processRawMatrixGlobal = processRawRowsMatrix;
 
-  // Wczytywanie pliku wybranego przez użytkownika z dysku komputera
   document.getElementById('excel-file-input').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -1238,16 +1207,39 @@ async function fetchFromGoogleDrive() {
     reader.onload = function(evt) {
       const data = new Uint8Array(evt.target.result);
       const workbook = XLSX.read(data, { type: 'array' });
-      parseAndProcessWorkbook(workbook);
-      alert('Import i przeliczenie raportu z pliku lokalnego zakończone sukcesem!');
+      
+      let rawSheet = workbook.SheetNames.includes("RAW_DATA") 
+        ? workbook.Sheets["RAW_DATA"] 
+        : workbook.Sheets[workbook.SheetNames[0]];
+        
+      const rawRows = XLSX.utils.sheet_to_json(rawSheet, { header: 1 });
+      processRawRowsMatrix(rawRows);
+      alert('Import i przeliczenie raportu zakończone sukcesem!');
     };
     reader.readAsArrayBuffer(file);
   });
 
-  // Startowa inicjalizacja z wbudowaną bazą lokacji
-  const defaultLocs = generateDefaultAllLocations();
-  const initialFiltered = defaultLocs.map(l => [l, 0, getRack(l)]);
-  initEngine(initialFiltered, {});
+  function tryRestoreFromCache() {
+    try {
+      const cachedFiltered = localStorage.getItem('wms_cache_filtered');
+      const cachedItems = localStorage.getItem('wms_cache_items');
+      const cachedTime = localStorage.getItem('wms_cache_time');
+
+      if (cachedFiltered && cachedItems) {
+        initEngine(JSON.parse(cachedFiltered), JSON.parse(cachedItems), cachedTime);
+        return true;
+      }
+    } catch(e) {
+      console.error("Błąd odczytu z localStorage", e);
+    }
+    return false;
+  }
+
+  if (!tryRestoreFromCache()) {
+    const defaultLocs = generateDefaultAllLocations();
+    const initialFiltered = defaultLocs.map(l => [l, 0, getRack(l)]);
+    initEngine(initialFiltered, {}, null);
+  }
 
 })();
 </script>
