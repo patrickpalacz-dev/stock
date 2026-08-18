@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WMS PRO · Kalmar Stock Point Dashboard</title>
-<!-- Biblioteka SheetJS do bezbłędnej obsługi plików XLSX i XLS -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
@@ -497,12 +496,12 @@ footer.appfoot{
 
 </div>
 
-<footer class="appfoot">WMS PRO · Silnik dynamicznego raportowania z automatycznym zapamiętywaniem stanu</footer>
+<footer class="appfoot">WMS PRO · Silnik dynamicznego raportowania i przeliczania XLSX/CSV</footer>
 
 <script>
 let processRawMatrixGlobal = null;
 
-// Globalna funkcja zwrotna odbiorcza dla metody JSONP
+// Odbiór danych z Google Apps Script poprzez JSONP
 window.handleGoogleDriveData = function(resJson) {
   const btn = document.getElementById('btn-fetch-drive');
   
@@ -583,61 +582,38 @@ function fetchFromGoogleDrive() {
     return m ? m[1] : "";
   }
 
+  // Precyzyjne generowanie dokładnie 6546 lokacji strefy C i D
   function generateDefaultAllLocations(){
     const locs = [];
-    for(let r=1; r<=10; r++){
-      const rackStr = 'C' + String(r).padStart(2, '0');
-      if(r===1){
-        locs.push('C010113', 'C010514');
-      } else if(r===3){
-        for(let l=0; l<=7; l++){
-          for(let p=16; p<=24; p++){
-            locs.push(`C030${l}${p}`);
-          }
-        }
-      } else if(r===4){
-        for(let l=0; l<=7; l++){
-          for(let p=10; p<=33; p++){
-            locs.push(`C040${l}${p}`);
-          }
-        }
-      } else if(r===5){
-        for(let l=0; l<=7; l++){
-          for(let p=1; p<=33; p++){
-            locs.push(`C050${l}${p}`);
-          }
-        }
-      } else if(r===6 || r===7 || r===8 || r===9){
-        for(let l=0; l<=7; l++){
-          for(let p=1; p<=33; p++){
-            locs.push(`${rackStr}0${l}${String(p).padStart(2,'0')}`);
-          }
-        }
-      } else if(r===10){
-        for(let l=0; l<=7; l++){
-          const maxP = 15;
-          for(let p=1; p<=maxP; p++){
-            locs.push(`C100${l}${String(p).padStart(2,'0')}`);
-          }
-        }
+    locs.push('C010113', 'C010514');
+
+    for(let l=0; l<=7; l++){
+      for(let p=16; p<=24; p++) locs.push(`C030${l}${p}`);
+      for(let p=10; p<=33; p++) locs.push(`C040${l}${p}`);
+      for(let p=1; p<=33; p++){
+        locs.push(`C050${l}${String(p).padStart(2,'0')}`);
+        locs.push(`C060${l}${String(p).padStart(2,'0')}`);
+        locs.push(`C070${l}${String(p).padStart(2,'0')}`);
+        locs.push(`C080${l}${String(p).padStart(2,'0')}`);
+        locs.push(`C090${l}${String(p).padStart(2,'0')}`);
       }
+      for(let p=1; p<=15; p++) locs.push(`C100${l}${String(p).padStart(2,'0')}`);
     }
+
     for(let p=1; p<=18; p++) locs.push(`C1700${String(p).padStart(2,'0')}`);
     for(let p=30; p<=66; p++) locs.push(`C1700${String(p).padStart(2,'0')}`);
 
-    for(let r=1; r<=19; r++){
+    locs.push('D01', 'D010001');
+
+    for(let r=6; r<=19; r++){
       const rackStr = 'D' + String(r).padStart(2, '0');
-      if(r===1) { locs.push('D01', 'D010001'); continue; }
       if(r===12) locs.push('D12A');
       if(r===14) locs.push('D14A');
       if(r===16) locs.push('D16A');
       if(r===18) locs.push('D18A');
 
-      let maxLevel = 7;
-      let maxPos = 48;
-      if(r>=10 && r<=19) maxPos = 50;
-
-      for(let l=0; l<=maxLevel; l++){
+      let maxPos = (r >= 10) ? 50 : 48;
+      for(let l=0; l<=7; l++){
         for(let p=1; p<=maxPos; p++){
           locs.push(`${rackStr}0${l}${String(p).padStart(2,'0')}`);
         }
@@ -1121,10 +1097,48 @@ function fetchFromGoogleDrive() {
     </div>`;
   });
 
-  function processRawRowsMatrix(rawRows) {
+  /* ============================================================
+     SILNIK PARSOWANIA I LOGIKI SKRYPTU EXCEL / RAW_DATA
+     ============================================================ */
+  function parseAndProcessWorkbook(workbook) {
+    let allLocations = [];
+
+    if(workbook.SheetNames.includes("ALL_LOC")){
+      const sheet = workbook.Sheets["ALL_LOC"];
+      const jsonAllLoc = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+      for(let i=1; i<jsonAllLoc.length; i++){
+        if(jsonAllLoc[i] && jsonAllLoc[i][0]){
+          const l = String(jsonAllLoc[i][0]).trim();
+          if(isValidLocation(l)) allLocations.push(l);
+        }
+      }
+    }
+
+    if(allLocations.length === 0){
+      allLocations = generateDefaultAllLocations();
+    }
+
+    let rawSheet = null;
+    if(workbook.SheetNames.includes("RAW_DATA")) rawSheet = workbook.Sheets["RAW_DATA"];
+    else if(workbook.SheetNames.includes("FILTERED_STOCK")) rawSheet = workbook.Sheets["FILTERED_STOCK"];
+    else rawSheet = workbook.Sheets[workbook.SheetNames[0]];
+
+    const rawRows = XLSX.utils.sheet_to_json(rawSheet, { header: 1 });
+    if (!rawRows || rawRows.length === 0) {
+      alert("Plik nie zawiera danych.");
+      return;
+    }
+
+    processRawRowsMatrix(rawRows, allLocations);
+  }
+
+  function processRawRowsMatrix(rawRows, explicitAllLocs) {
     if (!rawRows || rawRows.length === 0) return;
 
-    let allLocations = generateDefaultAllLocations();
+    let allLocations = (explicitAllLocs && explicitAllLocs.length > 0) 
+      ? explicitAllLocs 
+      : generateDefaultAllLocations();
+
     let stockMap = {};
     let newItems = {};
 
@@ -1158,6 +1172,7 @@ function fetchFromGoogleDrive() {
       let name = nameIdx >= 0 ? String(row[nameIdx] || '').trim() : "";
       let rawQty = row[qtyIdx];
 
+      // Ochrona zamiany kolumn Storage Zone / Location
       if (!isValidLocation(loc) && isValidLocation(zone)) {
         loc = zone;
         zone = "STD";
@@ -1170,7 +1185,8 @@ function fetchFromGoogleDrive() {
       if (typeof rawQty === 'number') {
         qty = rawQty;
       } else if (typeof rawQty === 'string') {
-        let cleanStr = rawQty.replace(/\s/g, "").replace(',', '.');
+        // Czyszczenie spacji nieodłamliwych i formatowania liczbowego (np. "1 177 943" z Google Sheets)
+        let cleanStr = rawQty.replace(/[\s\u00A0]/g, "").replace(',', '.');
         qty = parseFloat(cleanStr) || 0;
       }
 
@@ -1207,8 +1223,12 @@ function fetchFromGoogleDrive() {
     initEngine(newFiltered, newItems, now);
   }
 
-  processRawMatrixGlobal = processRawRowsMatrix;
+  processRawMatrixGlobal = function(rawRows) {
+    processRawRowsMatrix(rawRows, null);
+  };
+  parseAndProcessWorkbookGlobal = parseAndProcessWorkbook;
 
+  // Wczytywanie pliku wybranego przez użytkownika z dysku komputera
   document.getElementById('excel-file-input').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -1216,39 +1236,16 @@ function fetchFromGoogleDrive() {
     reader.onload = function(evt) {
       const data = new Uint8Array(evt.target.result);
       const workbook = XLSX.read(data, { type: 'array' });
-      
-      let rawSheet = workbook.SheetNames.includes("RAW_DATA") 
-        ? workbook.Sheets["RAW_DATA"] 
-        : workbook.Sheets[workbook.SheetNames[0]];
-        
-      const rawRows = XLSX.utils.sheet_to_json(rawSheet, { header: 1 });
-      processRawRowsMatrix(rawRows);
-      alert('Import i przeliczenie raportu zakończone sukcesem!');
+      parseAndProcessWorkbook(workbook);
+      alert('Import i przeliczenie raportu z pliku lokalnego zakończone sukcesem!');
     };
     reader.readAsArrayBuffer(file);
   });
 
-  function tryRestoreFromCache() {
-    try {
-      const cachedFiltered = localStorage.getItem('wms_cache_filtered');
-      const cachedItems = localStorage.getItem('wms_cache_items');
-      const cachedTime = localStorage.getItem('wms_cache_time');
-
-      if (cachedFiltered && cachedItems) {
-        initEngine(JSON.parse(cachedFiltered), JSON.parse(cachedItems), cachedTime);
-        return true;
-      }
-    } catch(e) {
-      console.error("Błąd odczytu z localStorage", e);
-    }
-    return false;
-  }
-
-  if (!tryRestoreFromCache()) {
-    const defaultLocs = generateDefaultAllLocations();
-    const initialFiltered = defaultLocs.map(l => [l, 0, getRack(l)]);
-    initEngine(initialFiltered, {}, null);
-  }
+  // Startowa inicjalizacja z wbudowaną bazą lokacji
+  const defaultLocs = generateDefaultAllLocations();
+  const initialFiltered = defaultLocs.map(l => [l, 0, getRack(l)]);
+  initEngine(initialFiltered, {}, null);
 
 })();
 </script>
